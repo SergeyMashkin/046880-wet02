@@ -1,0 +1,9 @@
+Abus[7:0]
+Bbus[7:0]
+Qbus[7:0]
+Rbus[7:0]
+Tbus[1:0]
+K
+Cin
+ContIn[13:0]
+
