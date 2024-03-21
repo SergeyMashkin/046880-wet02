@@ -26,7 +26,7 @@ void evaluate_gate(hcmInstance *curInst){
 	hcmPort* curPort;
 	int curPortVal, curOutVal;
 	bool firstPort = true;
-	for(it_instPort = curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end();it_instPort,it_instPort++){
+	for(it_instPort = curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end(); it_instPort++){
 		curPort = it_instPort->second->getPort();
 		if(curPort->getDirection()==IN){
 			it_instPort->second->getNode()->getProp("Value",curPortVal);
@@ -135,17 +135,66 @@ int main(int argc, char **argv) {
 
 	//Add "value" parameter to the all node, initilize it to -1 (not defined)
 	map<string, hcmNode*>::iterator it_node;
-    int node_value = -1;
+	map<string, hcmInstPort*>::iterator it_instPort;
+	map<string, hcmInstance*>::iterator it_inst;
+	set<string>::iterator it_signal;
+    int init_node_value = 0;
+	bool curInVal,newInVal,curOutVal,newOutVal,curCLK;
+	bool inst_visited = false;
+	queue<hcmInstance*> gate_que;
+	queue<hcmNode*> node_que;
+	hcmNode* curNode;
+	hcmInstance* curInst;
+
 	for(it_node = flatCell->getNodes().begin(); it_node != flatCell->getNodes().end(); it_node++){
-        it_node->second->setProp("Value", node_value);
+        it_node->second->setProp("Value", init_node_value); // Each node will have signal value attached
+    }
+
+	for(it_inst = flatCell->getInstances().begin(); it_inst != flatCell->getInstances().end(); it_inst++){
+        it_inst->second->setProp("Visited", inst_visited);// Each instance will have a marker, to prevent doubling in gate queue
     }
 
 	// reading each vector
 	while (parser.readVector() == 0) {
 		// set the inputs to the values from the input vector.
-		
+		for(it_signal=signals.begin();it_signal!=signals.end();it_signal++){
+			flatCell->getPort(*it_signal)->owner()->getProp("Value", curInVal);// Get current node signal value
+			parser.getSigValue(*it_signal,newInVal);// Get signal value from vector
+			parser.getSigValue("CLK",curCLK);//Get CLK signal value, to simplify next steps
+			if(curInVal!=newInVal){ // WARNING: all values init. to 0, if we get a first vector 0..0 there wont be any update
+				flatCell->getPort(*it_signal)->owner()->setProp("Value", newInVal);// Update the node signal value
+				node_que.push(flatCell->getPort(*it_signal)->owner());// Push the current node in the node queue
+			}
+		}
 		// simulate the vector 
-
+		while(!node_que.empty()){//Event_Processor
+			curNode = node_que.front();
+			node_que.pop();
+			for(it_instPort=curNode->getInstPorts().begin();it_instPort!=curNode->getInstPorts().end();it_instPort++){
+				if (it_instPort->second->getPort()->getDirection() == IN){// Check only nodes connected to IN ports
+					if(it_instPort->second->getInst()->getProp("Visited", inst_visited)==false){
+						gate_que.push(it_instPort->second->getInst());// Push the current gate in the node queue
+						it_instPort->second->getInst()->setProp("Visited", true);
+					}
+				}
+			}
+			//WARNING: Im assuming that every gate has only one OUT port (in a flat model).
+			while(!gate_que.empty()){ //Gate_Processor
+				curInst = gate_que.front();
+				gate_que.pop();
+				curInst->setProp("Visited", false);
+				for(it_instPort=curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end();it_instPort++){
+					if (it_instPort->second->getPort()->getDirection() == OUT){// Check only nodes connected to OUT port
+						it_instPort->second->getPort()->owner()->getProp("Value",curOutVal);
+						evaluate_gate(curInst);
+						it_instPort->second->getPort()->owner()->getProp("Value",newOutVal);
+						if(curOutVal!=newOutVal){
+							node_que.push(it_instPort->second->getPort()->owner());// Out value of a gate changed, hence pushing node to node queue
+						}
+					}
+				}
+			}
+		}
 		// go over all values and write them to the vcd.
 		
 		vcd.changeTime(time++);
