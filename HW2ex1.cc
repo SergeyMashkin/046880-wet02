@@ -24,9 +24,15 @@ void evaluate_gate(hcmInstance *curInst){
 	map<string, hcmInstPort*>::iterator it_instPort;
 	hcmInstPort* outInstPort;
 	hcmPort* curPort;
-	int curPortVal, curOutVal;
+	bool curPortVal, curOutVal;
 	bool firstPort = true;
 	for(it_instPort = curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end(); it_instPort++){
+		// if instance is i6 , print all of its pots values
+		if (curInst->getName() == "i1") {
+			bool portval;
+			it_instPort->second->getNode()->getProp("Value",portval);
+			cout << "i1 port: " << it_instPort->first << " value: " << portval << endl;
+		}	
 		curPort = it_instPort->second->getPort();
 		if(curPort->getDirection()==IN){
 			it_instPort->second->getNode()->getProp("Value",curPortVal);
@@ -35,23 +41,77 @@ void evaluate_gate(hcmInstance *curInst){
 				firstPort = false;
 			}
 			else{
-				if(cell_name.find("or") || cell_name.find("nor"))
+				// check if cell_name is xor or xnor :
+				if ((cell_name.find("xor") != std::string::npos) || (cell_name.find("xnor") != std::string::npos)) {
+					curOutVal = curOutVal ^ curPortVal;
+				}
+				else if ((cell_name.find("or") != std::string::npos) || (cell_name.find("nor") != std::string::npos)) {
+					cout  << "or/nor" << cell_name << endl;
 					curOutVal = curOutVal | curPortVal;
-				else if (cell_name.find("and") || cell_name.find("nand"))
+				} else if ((cell_name.find("and") != std::string::npos) || (cell_name.find("nand") != std::string::npos)) {
 					curOutVal = curOutVal & curPortVal;
-				else if (cell_name.find("xor") || cell_name.find("xnor"))
-					curOutVal = curOutVal ^ curPortVal;				
+					// if its i6 print 	ut the values
+				}
 			}
 		}
 		else if(curPort->getDirection()==OUT) {
 			outInstPort = it_instPort->second;
 		}
-		if (cell_name.find("xnor")||cell_name.find("not")||cell_name.find("nand")||cell_name.find("nor"))
-			curOutVal = !curOutVal;
-		outInstPort->setProp("Value",curOutVal);	
-	}
 
-outInstPort->getNode()->setProp("Value", curOutVal);
+		// check here if need to add node to queue?
+	}
+	if (curInst->getName() == "i1") {
+		cout << "1 i1 curOutVal: " << curOutVal << endl;
+	}
+	// if cell_name is not/xnor/nand/nor - invert the output
+	if (cell_name.find("not")!= std::string::npos || cell_name.find("nor")!= std::string::npos 
+					|| cell_name.find("nand")!= std::string::npos  || cell_name.find("xnor")!= std::string::npos)
+		curOutVal = !curOutVal;
+	if (curInst->getName() == "i1") {
+		cout << "2 i1 curOutVal: " << curOutVal << endl;
+	}
+	outInstPort->getNode()->setProp("Value", curOutVal);
+}
+
+bool isLooping(hcmInstance *inst, hcmInstance *inst2) {
+	for (auto it: inst->getInstPorts()) {
+		if (it.second->getPort()->getDirection() == OUT) {
+			for (auto it2: it.second->getNode()->getInstPorts()) {
+				if (it2.second->getPort()->getDirection() == IN) {
+					if (it2.second->getInst() == inst2) {
+						return true;
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
+// setRank - recursive functions that sets the rank of instance, and continuees to instances connected to it's output.
+// function assumes instances is not only VSS VDD.
+void setRank(hcmInstance *inst, int rank) {
+	cout << "setRank: " << inst->getName() << " " << rank << endl;
+	// if there is "ff" in name, pause and wait for user to hit enter
+	inst->setProp("rank", rank);
+	for (auto it : inst->getInstPorts()) {
+		if (it.second->getPort()->getDirection() == OUT) {
+		for (auto it2 : it.second->getNode()->getInstPorts()) {
+			if (it2.second->getPort()->getDirection() == IN) {
+				// to prevent looping
+				if (isLooping(it2.second->getInst(), inst)){
+					continue;
+				}
+				// only go in if rank is lower than current rank
+				int currRank=-1;
+				it2.second->getInst()->getProp("rank", currRank);
+				if (currRank <= rank) {
+					setRank(it2.second->getInst(), rank + 1);
+				}
+			}
+		}
+		}
+	}
 }
 
 int main(int argc, char **argv) {
@@ -132,72 +192,198 @@ int main(int argc, char **argv) {
 
 	//-----------------------------------------------------------------------------------------//
 	//enter your code below
-
+	list<const hcmInstance*> parent_l;
 	//Add "value" parameter to the all node, initilize it to -1 (not defined)
 	map<string, hcmNode*>::iterator it_node;
 	map<string, hcmInstPort*>::iterator it_instPort;
 	map<string, hcmInstance*>::iterator it_inst;
 	set<string>::iterator it_signal;
-    int init_node_value = 0;
+    bool init_node_value = 0;
 	bool curInVal,newInVal,curOutVal,newOutVal,curCLK;
-	bool inst_visited = false;
+	bool in_gates_que = false;
 	queue<hcmInstance*> gate_que;
 	queue<hcmNode*> node_que;
 	hcmNode* curNode;
 	hcmInstance* curInst;
-
+	hcmNode* DebugNode;
+	// initialize 
 	for(it_node = flatCell->getNodes().begin(); it_node != flatCell->getNodes().end(); it_node++){
         it_node->second->setProp("Value", init_node_value); // Each node will have signal value attached
     }
-
 	for(it_inst = flatCell->getInstances().begin(); it_inst != flatCell->getInstances().end(); it_inst++){
-        it_inst->second->setProp("Visited", inst_visited);// Each instance will have a marker, to prevent doubling in gate queue
+        it_inst->second->setProp("InQue", in_gates_que);// Each instance will have a marker, to prevent doubling in gate queue
     }
+	vector<pair<int, string>> maxRankVector;
+	for (auto it: flatCell->getInstances()){
+		it.second->setProp("rank", -1);
+	}
+	for (auto it: flatCell->getPorts()) {
+		if (it->getDirection() == IN ) {
+		// skip VSS / VDD Nodes
+			if (it->owner()->getName() != "VDD" && it->owner()->getName() != "VSS") {
+				for (auto it2: it->owner()->getInstPorts()) {
+					int rank = -1;
+					it2.second->getInst()->getProp("rank", rank);
+					if (rank == -1) {
+						setRank(it2.second->getInst(), 0);
+					}
+				}
+			}
+		}
+	}
 
+	// insert all instances to maxRankVector, order by increasing rank, if rank equal- order by name
+	for (auto it: flatCell->getInstances()) {
+		int rank = -1;
+		it.second->getProp("rank", rank);
+		// skip VSS / VDD Nodes
+		if (rank == -1) {
+		continue;
+		}
+		// insert first instance to vector
+		if (maxRankVector.empty()) {
+			maxRankVector.push_back(make_pair(rank, it.second->getName()));
+			continue;
+		}
+		// insert by order
+		for (auto it2 = maxRankVector.begin(); true; it2++) {
+		if (it2->first > rank) {
+			maxRankVector.insert(it2, make_pair(rank, it.second->getName()));
+			break;
+		} else if (it2->first == rank) {
+			if (it2->second > it.second->getName()) {
+			maxRankVector.insert(it2, make_pair(rank, it.second->getName()));
+			break;
+			}
+			// if reached end - insert
+		} else if (it2 == maxRankVector.end()) {
+			maxRankVector.push_back(make_pair(rank, it.second->getName()));
+			break;
+		}
+		}
+	}
+	// // print out all instances in maxRankVector
+	// for (auto it: maxRankVector) {
+	// 	cout << it.first << " " << it.second << endl;
+	// }
+	cout << "entering eval_gate" << endl;
+	//evaluate gates in order of maxRankVector
+	for (auto it: maxRankVector) {
+		it_inst = flatCell->getInstances().find(it.second);
+		evaluate_gate(it_inst->second);
+	}
+	// cout << "entering main loop" << endl;
 	// reading each vector
+	cout << "entering main loop" << endl;
 	while (parser.readVector() == 0) {
+		cout << "====================" << "time: " << time << "====================" << endl;
 		// set the inputs to the values from the input vector.
 		for(it_signal=signals.begin();it_signal!=signals.end();it_signal++){
 			flatCell->getPort(*it_signal)->owner()->getProp("Value", curInVal);// Get current node signal value
 			parser.getSigValue(*it_signal,newInVal);// Get signal value from vector
 			parser.getSigValue("CLK",curCLK);//Get CLK signal value, to simplify next steps
 			if(curInVal!=newInVal){ // WARNING: all values init. to 0, if we get a first vector 0..0 there wont be any update
+				cout << "Pushing signal:" << *it_signal << " to queue" << endl;
 				flatCell->getPort(*it_signal)->owner()->setProp("Value", newInVal);// Update the node signal value
 				node_que.push(flatCell->getPort(*it_signal)->owner());// Push the current node in the node queue
 			}
 		}
+		// update data on FFs out nodes:
+
 		// simulate the vector 
 		while(!node_que.empty()){//Event_Processor
 			curNode = node_que.front();
 			node_que.pop();
+			cout << "current node_que: " << node_que.size() << endl;
+			if (node_que.size() == 0) {
+				// print node value:
+				bool val;
+				curNode->getProp("Value", val);
+				cout << "current node: " << curNode->getName() << " value: " << val << endl;
+				}
+				// print node's inst ports:
 			for(it_instPort=curNode->getInstPorts().begin();it_instPort!=curNode->getInstPorts().end();it_instPort++){
+				if (node_que.size() == 0) 
+					cout << "C node_que is empty" << endl;
 				if (it_instPort->second->getPort()->getDirection() == IN){// Check only nodes connected to IN ports
-					if(it_instPort->second->getInst()->getProp("Visited", inst_visited)==false){
+					if (node_que.size() == 0) 
+						cout << "A node_que is empty" << endl;
+					it_instPort->second->getInst()->getProp("InQue", in_gates_que);
+					if (in_gates_que==false) {
+						if (node_que.size() == 0) 
+							cout << "B node_que is empty" << endl;
+
 						gate_que.push(it_instPort->second->getInst());// Push the current gate in the node queue
-						it_instPort->second->getInst()->setProp("Visited", true);
+						it_instPort->second->getInst()->setProp("InQue", true);
 					}
 				}
 			}
-			//WARNING: Im assuming that every gate has only one OUT port (in a flat model).
+			// //WARNING: Im assuming that every gate has only one OUT port (in a flat model).
 			while(!gate_que.empty()){ //Gate_Processor
+
 				curInst = gate_que.front();
 				gate_que.pop();
-				curInst->setProp("Visited", false);
+				curInst->setProp("InQue", false);
 				for(it_instPort=curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end();it_instPort++){
 					if (it_instPort->second->getPort()->getDirection() == OUT){// Check only nodes connected to OUT port
 						it_instPort->second->getPort()->owner()->getProp("Value",curOutVal);
 						evaluate_gate(curInst);
 						it_instPort->second->getPort()->owner()->getProp("Value",newOutVal);
 						if(curOutVal!=newOutVal){
+							cout << "Out val changed for gate:" << curInst->getName() << endl;
+							// update value for nodes outside
+							
+							for (auto it: it_instPort->second->getNode()->getInstPorts()) {
+								if (it.second->getPort()->getDirection() == IN) {
+									it.second->getPort()->owner()->setProp("Value", newOutVal);
+									node_que.push(it.second->getPort()->owner());// Out value of a gate changed, hence pushing node to node queue
+								}
+							}
+							// if (curInst->getName() == "ff1/not_1") {
+							// 	cout << "ff1/not_1 - pushing "<<  it_instPort->second->getPort()->owner()->getName() << endl;
+							// 	cout << "pushed node direction is IN?" << (it_instPort->second->getPort()->getDirection() == IN) << endl;
+							// 	cout << "pushed node direction is OUT?" << (it_instPort->second->getPort()->getDirection() == OUT) << endl;
+							// 	cout << "pushed node number of InstPorts " << it_instPort->second->getPort()->owner()->getInstPorts().size() << endl;
+							// 	for (auto it: it_instPort->second->getNode()->getInstPorts()) {
+							// 		if (it.second->getPort()->getDirection() == IN) {
+							// 			cout << "pushed node of IN port: " << it.second->getPort()->getName() << endl;
+							// 			cout << "the pushed node is: " << it.second->getPort()->owner()->getName() << endl;
+							// 			cout << "The instance of node is: " << it.second->getInst()->getName() << endl;
+							// 			node_que.push(it.second->getPort()->owner());// Out value of a gate changed, hence pushing node to node queue
+							// 			cout << "current node_que: " << node_que.size() << endl;
+							// 			DebugNode = it.second->getPort()->owner();
+							// 		}
+							// 		else {
+							// 			cout << "Did not push node of OUT port: " << it.second->getPort()->getName() << endl;
+							// 		}
+							// 	}
+							// 	DebugNode = it_instPort->second->getPort()->owner();
+							// }
 							node_que.push(it_instPort->second->getPort()->owner());// Out value of a gate changed, hence pushing node to node queue
 						}
 					}
 				}
+				
 			}
 		}
 		// go over all values and write them to the vcd.
+		for (it_node = flatCell->getNodes().begin(); it_node != flatCell->getNodes().end(); it_node++) {
+			if (it_node->second->getName() == "VDD" || it_node->second->getName() == "VSS") {
+				continue;
+			}
+			else {
+				bool val;
+				it_node->second->getProp("Value", val);
+				hcmNodeCtx *Ctx = new hcmNodeCtx(parent_l, it_node->second);
+				vcd.changeValue(Ctx, val);
+			}
+		}
 		
 		vcd.changeTime(time++);
+		// finish after first vector
+		//if (time == 4) {
+		//	break;
+		//}
 	}
 
 	//-----------------------------------------------------------------------------------------//

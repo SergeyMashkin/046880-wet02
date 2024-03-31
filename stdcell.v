@@ -202,4 +202,23 @@ endmodule
 module dff(D,CLK,Q);
    input D, CLK;
    output Q;
+
+   wire not_out[0:4];
+   wire and_out[0:3];
+   wire nor_out[0:2];
+
+   not not_0 (.A(D), .Y(not_out[0]));
+   not not_1 (.A(not_out[0]), .Y(not_out[1]));
+   not not_2 (.A(not_out[1]), .Y(not_out[2]));
+   not not_3 (.A(CLK), .Y(not_out[3]));
+   and and_0 (.A(not_out[2]),.B(not_out[3]),.Y(and_out[0]));
+   and and_1 (.A(not_out[1]), .B(not_out[3]), .Y(and_out[1]));
+   nor nor_0 (.A(and_out[0]), .B(nor_out[1]) , .Y(nor_out[0]));
+   nor nor_1 (.A(and_out[1]), .B(nor_out[0]), .Y(nor_out[1]));
+   not not_4 (.A(nor_out[1]), .Y(not_out[4]));
+   and and_2 (.A(not_out[4]), .B(CLK), .Y(and_out[2]));
+   and and_3 (.A(nor[1]), .B(CLK), .Y(and_out[3]));
+   nor nor_2 (.A(and_out[2]), .B(Q), .Y(nor_out[2]));
+   nor nor_3 (.A(and_out[3]), .B(nor_out[2]), .Y(Q));
+
 endmodule
