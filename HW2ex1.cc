@@ -36,6 +36,7 @@ void evaluate_gate(hcmInstance *curInst){
 		curPort = it_instPort->second->getPort();
 		if(curPort->getDirection()==IN){
 			it_instPort->second->getNode()->getProp("Value",curPortVal);
+			cout << "In node name: " << it_instPort->second->getNode()->getName() << " value: " << curPortVal << endl;
 			if(firstPort){
 				curOutVal = curPortVal;
 				firstPort = false;
@@ -46,7 +47,6 @@ void evaluate_gate(hcmInstance *curInst){
 					curOutVal = curOutVal ^ curPortVal;
 				}
 				else if ((cell_name.find("or") != std::string::npos) || (cell_name.find("nor") != std::string::npos)) {
-					cout  << "or/nor" << cell_name << endl;
 					curOutVal = curOutVal | curPortVal;
 				} else if ((cell_name.find("and") != std::string::npos) || (cell_name.find("nand") != std::string::npos)) {
 					curOutVal = curOutVal & curPortVal;
@@ -67,9 +67,10 @@ void evaluate_gate(hcmInstance *curInst){
 	if (cell_name.find("not")!= std::string::npos || cell_name.find("nor")!= std::string::npos 
 					|| cell_name.find("nand")!= std::string::npos  || cell_name.find("xnor")!= std::string::npos)
 		curOutVal = !curOutVal;
-	if (curInst->getName() == "i1") {
-		cout << "2 i1 curOutVal: " << curOutVal << endl;
-	}
+	// throw error if curOutVal is not defined 0 or 1
+
+	// stop the code
+	cout << "setting value for " << outInstPort->getNode()->getName() << " to " << curOutVal << endl;	
 	outInstPort->getNode()->setProp("Value", curOutVal);
 }
 
@@ -199,8 +200,13 @@ int main(int argc, char **argv) {
 	map<string, hcmInstance*>::iterator it_inst;
 	set<string>::iterator it_signal;
     bool init_node_value = 0;
-	bool curInVal,newInVal,curOutVal,newOutVal,curCLK;
+	bool curInVal = 0;
+	bool newInVal = 0;
+	bool curOutVal = 0; 
+	bool newOutVal = 0;
+	bool curCLK = 0;
 	bool in_gates_que = false;
+	bool first_node_run = true;
 	queue<hcmInstance*> gate_que;
 	queue<hcmNode*> node_que;
 	hcmNode* curNode;
@@ -295,50 +301,49 @@ int main(int argc, char **argv) {
 			curNode = node_que.front();
 			node_que.pop();
 			cout << "current node_que: " << node_que.size() << endl;
-			if (node_que.size() == 0) {
-				// print node value:
-				bool val;
-				curNode->getProp("Value", val);
-				cout << "current node: " << curNode->getName() << " value: " << val << endl;
-				}
-				// print node's inst ports:
-			for(it_instPort=curNode->getInstPorts().begin();it_instPort!=curNode->getInstPorts().end();it_instPort++){
-				if (node_que.size() == 0) 
-					cout << "C node_que is empty" << endl;
-				if (it_instPort->second->getPort()->getDirection() == IN){// Check only nodes connected to IN ports
-					if (node_que.size() == 0) 
-						cout << "A node_que is empty" << endl;
-					it_instPort->second->getInst()->getProp("InQue", in_gates_que);
-					if (in_gates_que==false) {
-						if (node_que.size() == 0) 
-							cout << "B node_que is empty" << endl;
-
-						gate_que.push(it_instPort->second->getInst());// Push the current gate in the node queue
-						it_instPort->second->getInst()->setProp("InQue", true);
+			// print node's inst ports:
+			if (first_node_run) {
+				for(it_instPort=curNode->getInstPorts().begin();it_instPort!=curNode->getInstPorts().end();it_instPort++){
+					cout << "Inst port:" << it_instPort->second->getName() << endl;
+					if (it_instPort->second->getPort()->getDirection() == IN){// Check only nodes connected to IN ports
+						it_instPort->second->getInst()->getProp("InQue", in_gates_que);
+						if (in_gates_que==false) {
+							gate_que.push(it_instPort->second->getInst());// Push the current gate in the node queue
+							it_instPort->second->getInst()->setProp("InQue", true);
+						}
 					}
 				}
 			}
 			// //WARNING: Im assuming that every gate has only one OUT port (in a flat model).
 			while(!gate_que.empty()){ //Gate_Processor
-
+				cout << "in gate que loop with num of gates: " << gate_que.size() << endl;
 				curInst = gate_que.front();
 				gate_que.pop();
 				curInst->setProp("InQue", false);
 				for(it_instPort=curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end();it_instPort++){
 					if (it_instPort->second->getPort()->getDirection() == OUT){// Check only nodes connected to OUT port
-						it_instPort->second->getPort()->owner()->getProp("Value",curOutVal);
+						cout << "Checking gate:" << curInst->getName() << " port:" << it_instPort->first << endl;
+						it_instPort->second->getNode()->getProp("Value",curOutVal);
+						if (curOutVal != 0 && curOutVal != 1) {
+							cout << "ERROR: curOutVal is not 0 or 1, value " << curOutVal << endl;
+							exit(1);
+						}
 						evaluate_gate(curInst);
-						it_instPort->second->getPort()->owner()->getProp("Value",newOutVal);
+						it_instPort->second->getNode()->getProp("Value",newOutVal);
+						cout << "curOutVal: " << curOutVal << " newOutVal: " << newOutVal << endl;
 						if(curOutVal!=newOutVal){
 							cout << "Out val changed for gate:" << curInst->getName() << endl;
 							// update value for nodes outside
-							
+							it_instPort->second->getPort()->owner()->setProp("Value", newOutVal);
 							for (auto it: it_instPort->second->getNode()->getInstPorts()) {
 								if (it.second->getPort()->getDirection() == IN) {
+									cout << "updating value IN node:" << it.second->getPort()->owner()->getName() << endl;
 									it.second->getPort()->owner()->setProp("Value", newOutVal);
-									node_que.push(it.second->getPort()->owner());// Out value of a gate changed, hence pushing node to node queue
+									//node_que.push(it.second->getPort()->owner());// Out value of a gate changed, hence pushing node to node queue
 								}
 							}
+							cout << "pushing node: " << it_instPort->second->getPort()->owner()->getName() << endl;
+							node_que.push(it_instPort->second->getNode());// Out value of a gate changed, hence pushing node to node queue
 							// if (curInst->getName() == "ff1/not_1") {
 							// 	cout << "ff1/not_1 - pushing "<<  it_instPort->second->getPort()->owner()->getName() << endl;
 							// 	cout << "pushed node direction is IN?" << (it_instPort->second->getPort()->getDirection() == IN) << endl;
@@ -359,7 +364,6 @@ int main(int argc, char **argv) {
 							// 	}
 							// 	DebugNode = it_instPort->second->getPort()->owner();
 							// }
-							node_que.push(it_instPort->second->getPort()->owner());// Out value of a gate changed, hence pushing node to node queue
 						}
 					}
 				}
