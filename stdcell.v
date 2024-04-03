@@ -217,7 +217,7 @@ module dff(D,CLK,Q);
    nor nor_1 (.A(and_out[1]), .B(nor_out[0]), .Y(nor_out[1]));
    not not_4 (.A(nor_out[1]), .Y(not_out[4]));
    and and_2 (.A(not_out[4]), .B(CLK), .Y(and_out[2]));
-   and and_3 (.A(nor[1]), .B(CLK), .Y(and_out[3]));
+   and and_3 (.A(nor_out[1]), .B(CLK), .Y(and_out[3]));
    nor nor_2 (.A(and_out[2]), .B(Q), .Y(nor_out[2]));
    nor nor_3 (.A(and_out[3]), .B(nor_out[2]), .Y(Q));
 

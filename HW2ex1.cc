@@ -28,15 +28,11 @@ void evaluate_gate(hcmInstance *curInst){
 	bool firstPort = true;
 	for(it_instPort = curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end(); it_instPort++){
 		// if instance is i6 , print all of its pots values
-		if (curInst->getName() == "i1") {
-			bool portval;
-			it_instPort->second->getNode()->getProp("Value",portval);
-			cout << "i1 port: " << it_instPort->first << " value: " << portval << endl;
-		}	
+
 		curPort = it_instPort->second->getPort();
 		if(curPort->getDirection()==IN){
 			it_instPort->second->getNode()->getProp("Value",curPortVal);
-			cout << "In node name: " << it_instPort->second->getNode()->getName() << " value: " << curPortVal << endl;
+			cout << "Eval_Gate : IN node name: " << it_instPort->second->getNode()->getName() << " value: " << curPortVal << endl;
 			if(firstPort){
 				curOutVal = curPortVal;
 				firstPort = false;
@@ -273,6 +269,9 @@ int main(int argc, char **argv) {
 	cout << "entering main loop" << endl;
 	while (parser.readVector() == 0) {
 		cout << "====================" << "time: " << time << "====================" << endl;
+		// if (time == 3) {
+		// 	exit(1);
+		// }
 		// set the inputs to the values from the input vector.
 		for(it_signal=signals.begin();it_signal!=signals.end();it_signal++){
 			flatCell->getPort(*it_signal)->owner()->getProp("Value", curInVal);// Get current node signal value
