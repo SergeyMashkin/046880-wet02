@@ -72,6 +72,7 @@ bool isLooping(hcmInstance *inst, hcmInstance *inst2) {
 			for (auto it2: it.second->getNode()->getInstPorts()) {
 				if (it2.second->getPort()->getDirection() == IN) {
 					if (it2.second->getInst() == inst2) {
+						cout << "looping: " << inst->getName() << " " << inst2->getName() << endl;
 						return true;
 					}
 				}
@@ -84,25 +85,23 @@ bool isLooping(hcmInstance *inst, hcmInstance *inst2) {
 // setRank - recursive functions that sets the rank of instance, and continuees to instances connected to it's output.
 // function assumes instances is not only VSS VDD.
 void setRank(hcmInstance *inst, int rank) {
-	cout << "setRank: " << inst->getName() << " " << rank << endl;
-	// if there is "ff" in name, pause and wait for user to hit enter
 	inst->setProp("rank", rank);
 	for (auto it : inst->getInstPorts()) {
 		if (it.second->getPort()->getDirection() == OUT) {
-		for (auto it2 : it.second->getNode()->getInstPorts()) {
-			if (it2.second->getPort()->getDirection() == IN) {
-				// to prevent looping
-				if (isLooping(it2.second->getInst(), inst)){
-					continue;
-				}
-				// only go in if rank is lower than current rank
-				int currRank=-1;
-				it2.second->getInst()->getProp("rank", currRank);
-				if (currRank <= rank) {
-					setRank(it2.second->getInst(), rank + 1);
+			for (auto it2 : it.second->getNode()->getInstPorts()) {
+				if (it2.second->getPort()->getDirection() == IN) {
+					// to prevent looping
+					if (isLooping(it2.second->getInst(), inst)){
+						continue;
+					}
+					// only go in if rank is lower than current rank
+					int currRank=-1;
+					it2.second->getInst()->getProp("rank", currRank);
+					if (currRank <= rank) {
+						setRank(it2.second->getInst(), rank + 1);
+					}
 				}
 			}
-		}
 		}
 	}
 }
@@ -215,12 +214,14 @@ int main(int argc, char **argv) {
 		it.second->setProp("rank", -1);
 	}
 	for (auto it: flatCell->getPorts()) {
+		cout << "port: " << it->getName() << " direction: " << it->getDirection() << endl;
 		if (it->getDirection() == IN ) {
 		// skip VSS / VDD Nodes
 			if (it->owner()->getName() != "VDD" && it->owner()->getName() != "VSS") {
 				for (auto it2: it->owner()->getInstPorts()) {
 					int rank = -1;
 					it2.second->getInst()->getProp("rank", rank);
+					cout << "Node: " << it2.first << " Rank: " << rank << endl;
 					if (rank == -1) {
 						setRank(it2.second->getInst(), 0);
 					}
@@ -228,37 +229,53 @@ int main(int argc, char **argv) {
 			}
 		}
 	}
-
+	cout << "Starting max rank sorting loop" << endl;
 	// insert all instances to maxRankVector, order by increasing rank, if rank equal- order by name
 	for (auto it: flatCell->getInstances()) {
+		cout << "MaxRank insert loop: instance: " << it.second->getName() << endl;
 		int rank = -1;
 		it.second->getProp("rank", rank);
+		cout << "Rank: " << rank << endl;
 		// skip VSS / VDD Nodes
 		if (rank == -1) {
-		continue;
+			cout << "Skipping instance: " << it.second->getName() << " with rank -1" << endl;
+			continue;
 		}
 		// insert first instance to vector
 		if (maxRankVector.empty()) {
+			cout << "inserting first instance: " << it.second->getName() << " with rank: " << rank << endl;
 			maxRankVector.push_back(make_pair(rank, it.second->getName()));
 			continue;
 		}
 		// insert by order
+		cout << "entering insert loop, size of MaxRankVector = " << maxRankVector.size() << endl;
 		for (auto it2 = maxRankVector.begin(); true; it2++) {
-		if (it2->first > rank) {
-			maxRankVector.insert(it2, make_pair(rank, it.second->getName()));
-			break;
-		} else if (it2->first == rank) {
-			if (it2->second > it.second->getName()) {
-			maxRankVector.insert(it2, make_pair(rank, it.second->getName()));
-			break;
+			//cout << "comparing instance: " << it.first << " with rank: " << rank << " to instance: " << it2->second << " with rank: " << it2->first << endl;
+			if (it2 == maxRankVector.end()) {
+				cout << "inserting as last instance: " << it.second->getName() << " with rank: " << rank << endl;
+				maxRankVector.push_back(make_pair(rank, it.second->getName()));
+				break;
 			}
-			// if reached end - insert
-		} else if (it2 == maxRankVector.end()) {
-			maxRankVector.push_back(make_pair(rank, it.second->getName()));
-			break;
-		}
+			if (it2->first > rank) {
+				cout << "inserting instance: " << it.second->getName() << " with rank: " << rank << endl;
+				maxRankVector.insert(it2, make_pair(rank, it.second->getName()));
+				break;
+			} else if (it2->first == rank) {
+				if (it2->second > it.second->getName()) {
+					cout << "inserting instance: " << it.second->getName() << " with rank: " << rank << endl;
+					maxRankVector.insert(it2, make_pair(rank, it.second->getName()));
+					break;
+				}
+			}
+				// if reached end - insert
+
 		}
 	}
+	// print out all instances in maxRankVector and their rank
+	for (auto it: maxRankVector) {
+		cout << "instance: " << it.second << " rank: " << it.first << endl;
+	}
+	//exit(1);
 	cout << "entering eval_gate" << endl;
 	//evaluate gates in order of maxRankVector
 	for (auto it: maxRankVector) {
