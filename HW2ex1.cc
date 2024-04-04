@@ -52,9 +52,6 @@ void evaluate_gate(hcmInstance *curInst){
 
 		// check here if need to add node to queue?
 	}
-	if (curInst->getName() == "i1") {
-		cout << "1 i1 curOutVal: " << curOutVal << endl;
-	}
 	// if cell_name is not/xnor/nand/nor - invert the output
 	if (cell_name.find("not")!= std::string::npos || cell_name.find("nor")!= std::string::npos 
 					|| cell_name.find("nand")!= std::string::npos  || cell_name.find("xnor")!= std::string::npos)
@@ -91,13 +88,18 @@ void setRank(hcmInstance *inst, int rank) {
 			for (auto it2 : it.second->getNode()->getInstPorts()) {
 				if (it2.second->getPort()->getDirection() == IN) {
 					// to prevent looping
-					if (isLooping(it2.second->getInst(), inst)){
-						continue;
-					}
-					// only go in if rank is lower than current rank
 					int currRank=-1;
 					it2.second->getInst()->getProp("rank", currRank);
+					// only go in if rank is lower than current rank
 					if (currRank <= rank) {
+						if (isLooping(it2.second->getInst(), inst)){
+							cout << "Detected loop from inst-Getname:" << inst->getName() << " or from inst->masterCell()->getName()" << inst->masterCell()->getName() << endl;
+							cout << "looping gate: " << it2.second->getInst()->getName() << endl;
+							// if it2.second->getInst()->getName() ends with "nor_0" or "nor_2" do not go in
+							if (it2.second->getInst()->getName().find("nor_0") != std::string::npos || it2.second->getInst()->getName().find("nor_2") != std::string::npos) {
+							    continue;
+							}
+					}
 						setRank(it2.second->getInst(), rank + 1);
 					}
 				}
@@ -252,17 +254,14 @@ int main(int argc, char **argv) {
 		for (auto it2 = maxRankVector.begin(); true; it2++) {
 			//cout << "comparing instance: " << it.first << " with rank: " << rank << " to instance: " << it2->second << " with rank: " << it2->first << endl;
 			if (it2 == maxRankVector.end()) {
-				cout << "inserting as last instance: " << it.second->getName() << " with rank: " << rank << endl;
 				maxRankVector.push_back(make_pair(rank, it.second->getName()));
 				break;
 			}
 			if (it2->first > rank) {
-				cout << "inserting instance: " << it.second->getName() << " with rank: " << rank << endl;
 				maxRankVector.insert(it2, make_pair(rank, it.second->getName()));
 				break;
 			} else if (it2->first == rank) {
 				if (it2->second > it.second->getName()) {
-					cout << "inserting instance: " << it.second->getName() << " with rank: " << rank << endl;
 					maxRankVector.insert(it2, make_pair(rank, it.second->getName()));
 					break;
 				}
@@ -281,13 +280,14 @@ int main(int argc, char **argv) {
 	for (auto it: maxRankVector) {
 		it_inst = flatCell->getInstances().find(it.second);
 		evaluate_gate(it_inst->second);
+		// if its a "ff/nor[3]" gate - make sure we got 0 value on output
 	}
 	// reading each vector
 	cout << "entering main loop" << endl;
 	while (parser.readVector() == 0) {
 		cout << "====================" << "time: " << time << "====================" << endl;
-		// if (time == 3) {
-		// 	exit(1);
+		// if (time == 2) {
+		//  	exit(1);
 		// }
 		// set the inputs to the values from the input vector.
 		for(it_signal=signals.begin();it_signal!=signals.end();it_signal++){
