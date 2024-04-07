@@ -59,7 +59,7 @@ void evaluate_gate(hcmInstance *curInst){
 		// check here if need to add node to queue?
 	}
 	// if cell_name is not/xnor/nand/nor - invert the output
-	if (cell_name.find("inv")!= std::string::npos || cell_name.find("nor")!= std::string::npos 
+	if (cell_name.find("inv")!= std::string::npos || cell_name.find("nor")!= std::string::npos || cell_name.find("not")!= std::string::npos 
 					|| cell_name.find("nand")!= std::string::npos  || cell_name.find("xnor")!= std::string::npos)
 		curOutVal = !curOutVal;
 	// throw error if curOutVal is not defined 0 or 1
