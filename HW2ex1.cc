@@ -26,17 +26,17 @@ void evaluate_gate(hcmInstance *curInst){
 	hcmPort* curPort;
 	bool curPortVal, curOutVal;
 	bool firstPort = true;
-	//cout << "Evaluating gate: " << curInst->getName() << " - " << cell_name << endl;
+	cout << "Evaluating gate: " << curInst->getName() << " - " << cell_name << endl;
 	for(it_instPort = curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end(); it_instPort++){
 		// if instance is i6 , print all of its pots values
 
 		curPort = it_instPort->second->getPort();
 		if(curPort->getDirection()==IN){
 			it_instPort->second->getNode()->getProp("Value",curPortVal);
-			//cout << "Eval_Gate : IN node name: " << it_instPort->second->getNode()->getName() << " value: " << curPortVal << endl;
+			cout << "Eval_Gate : IN node name: " << it_instPort->second->getNode()->getName() << " value: " << curPortVal << endl;
 			// if it_instPort->second->getNode()->getName() is ending with "Zbus[0]" pause and wait for user to hit ENTER key.
 			// if (it_instPort->second->getNode()->getName().find("Zbus[0]") != std::string::npos) {
-			// 	//cout << "Press ENTER to continue" << endl;
+			// 	cout << "Press ENTER to continue" << endl;
 			// 	cin.ignore();
 			// }
 			if(firstPort){
@@ -65,9 +65,9 @@ void evaluate_gate(hcmInstance *curInst){
 	// throw error if curOutVal is not defined 0 or 1
 
 	// stop the code
-	//cout << "setting value for " << outInstPort->getNode()->getName() << " to " << curOutVal << endl;	
-	if (outInstPort->getNode()->getName().find("Zbus[0]") != std::string::npos || outInstPort->getNode()->getName().find("Funcbus[0]") != std::string::npos) {
-		//cout << "Press ENTER to continue" << endl;
+	cout << "setting value for " << outInstPort->getNode()->getName() << " to " << curOutVal << endl;	
+	if (outInstPort->getNode()->getName().find("CC8/Cb2/X4_0") != std::string::npos || outInstPort->getNode()->getName().find("Cy1bus[0]") != std::string::npos || outInstPort->getNode()->getName().find("Cy2bus[0]") != std::string::npos) {
+		cout << "Press ENTER to continue" << endl;
 		//cin.ignore();
 	}
 
@@ -104,8 +104,8 @@ void setRank(hcmInstance *inst, int rank) {
 					// only go in if rank is lower than current rank
 					if (currRank <= rank) {
 						if (isLooping(it2.second->getInst(), inst)){
-							//cout << "Detected loop from inst-Getname:" << inst->getName() << " or from inst->masterCell()->getName()" << inst->masterCell()->getName() << endl;
-							//cout << "looping gate: " << it2.second->getInst()->getName() << endl;
+							cout << "Detected loop from inst-Getname:" << inst->getName() << " or from inst->masterCell()->getName()" << inst->masterCell()->getName() << endl;
+							cout << "looping gate: " << it2.second->getInst()->getName() << endl;
 							// if it2.second->getInst()->getName() ends with "nor_0" or "nor_2" do not go in
 							if (it2.second->getInst()->getName().find("nor_0") != std::string::npos || it2.second->getInst()->getName().find("nor_2") != std::string::npos) {
 							    continue;
@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
 	}
 	
 	hcmCell *flatCell = hcmFlatten(cellName + string("_flat"), topCell, globalNodes);
-	//cout << "-I- Top cell flattened" << endl;
+	cout << "-I- Top cell flattened" << endl;
 
 	string signalTextFile = vlgFiles[1];
 	string vectorTextFile = vlgFiles[2];
@@ -240,7 +240,7 @@ int main(int argc, char **argv) {
 			}
 		}
 	}
-	//cout << "Starting max rank sorting loop" << endl;
+	cout << "Starting max rank sorting loop" << endl;
 	// insert all instances to maxRankVector, order by increasing rank, if rank equal- order by name
 	for (auto it: flatCell->getInstances()) {
 		int rank = -1;
@@ -251,13 +251,13 @@ int main(int argc, char **argv) {
 		}
 		// insert first instance to vector
 		if (maxRankVector.empty()) {
-			//cout << "inserting first instance: " << it.second->getName() << " with rank: " << rank << endl;
+			cout << "inserting first instance: " << it.second->getName() << " with rank: " << rank << endl;
 			maxRankVector.push_back(make_pair(rank, it.second->getName()));
 			continue;
 		}
 		// insert by order
 		for (auto it2 = maxRankVector.begin(); true; it2++) {
-			////cout << "comparing instance: " << it.first << " with rank: " << rank << " to instance: " << it2->second << " with rank: " << it2->first << endl;
+			//cout << "comparing instance: " << it.first << " with rank: " << rank << " to instance: " << it2->second << " with rank: " << it2->first << endl;
 			if (it2 == maxRankVector.end()) {
 				maxRankVector.push_back(make_pair(rank, it.second->getName()));
 				break;
@@ -277,36 +277,47 @@ int main(int argc, char **argv) {
 	}
 	// print out all instances in maxRankVector and their rank
 	for (auto it: maxRankVector) {
-		//cout << "instance: " << it.second << " rank: " << it.first << endl;
+		cout << "instance: " << it.second << " rank: " << it.first << endl;
 	}
 
-	//cout << "entering eval_gate" << endl;
+	// eval all instances without a rank, or rank lower than 0
+	for (auto it: flatCell->getInstances()) {
+		int rank = -1;
+		it.second->getProp("rank", rank);
+		if (rank < 0) {
+			evaluate_gate(it.second);
+		}
+	}
+
 	//evaluate gates in order of maxRankVector
 	for (auto it: maxRankVector) {
 		it_inst = flatCell->getInstances().find(it.second);
 		evaluate_gate(it_inst->second);
 		// if its a "ff/nor[3]" gate - make sure we got 0 value on output
 	}
+
 	// reading each vector
-	//cout << "entering main loop" << endl;
+	cout << "entering main loop" << endl;
 	while (parser.readVector() == 0) {
-		//cout << "====================" << "time: " << time << "====================" << endl;
+		cout << "====================" << "time: " << time << "====================" << endl;
 		// if (time%10 == 0) {
 		// 	// wait for user to hit ENTER KEY (input)
-		// 	//cout << "Press ENTER to continue" << endl;
+		// 	cout << "Press ENTER to continue" << endl;
 		// 	cin.ignore();
+		//if (time == 2) {
+		//	exit(1);
+		//}
 
-		// }
-		// if (time == 2) {
-		//  	exit(1);
-		// }
+
+
+
 		// set the inputs to the values from the input vector.
 		for(it_signal=signals.begin();it_signal!=signals.end();it_signal++){
 			flatCell->getPort(*it_signal)->owner()->getProp("Value", curInVal);// Get current node signal value
 			parser.getSigValue(*it_signal,newInVal);// Get signal value from vector
 			parser.getSigValue("CLK",curCLK);//Get CLK signal value, to simplify next steps
 			if(curInVal!=newInVal){ // WARNING: all values init. to 0, if we get a first vector 0..0 there wont be any update
-				//cout << "Pushing signal:" << *it_signal << " to queue" << endl;
+				cout << "Pushing signal:" << *it_signal << " to queue" << endl;
 				flatCell->getPort(*it_signal)->owner()->setProp("Value", newInVal);// Update the node signal value
 				node_que.push(flatCell->getPort(*it_signal)->owner());// Push the current node in the node queue
 			}
@@ -315,10 +326,10 @@ int main(int argc, char **argv) {
 
 		// simulate the vector 
 		while(!node_que.empty()){//Event_Processor
-			//cout << "Im in time: " << time << endl;
+			cout << "Im in time: " << time << endl;
 			curNode = node_que.front();
 			node_que.pop();
-			//cout << "current node_que: " << node_que.size() << endl;
+			cout << "current node_que: " << node_que.size() << endl;
 			// print node's inst ports:
 			if (first_node_run) {
 				for(it_instPort=curNode->getInstPorts().begin();it_instPort!=curNode->getInstPorts().end();it_instPort++){
@@ -333,35 +344,35 @@ int main(int argc, char **argv) {
 			}
 			// //WARNING: Im assuming that every gate has only one OUT port (in a flat model).
 			while(!gate_que.empty()){ //Gate_Processor
-				//cout << "in gate que loop with num of gates: " << gate_que.size() << endl;
+				cout << "in gate que loop with num of gates: " << gate_que.size() << endl;
 				curInst = gate_que.front();
 				gate_que.pop();
 				curInst->setProp("InQue", false);
 				for(it_instPort=curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end();it_instPort++){
 					if (it_instPort->second->getPort()->getDirection() == OUT){// Check only nodes connected to OUT port
-						//cout << "Checking gate:" << curInst->getName() << " port:" << it_instPort->first << endl;
+						cout << "Checking gate:" << curInst->getName() << " port:" << it_instPort->first << endl;
 						it_instPort->second->getNode()->getProp("Value",curOutVal);
 						if (curOutVal != 0 && curOutVal != 1) {
-							//cout << "ERROR: curOutVal is not 0 or 1, value " << curOutVal << endl;
+							cout << "ERROR: curOutVal is not 0 or 1, value " << curOutVal << endl;
 							exit(1);
 						}
 						evaluate_gate(curInst);
 						it_instPort->second->getNode()->getProp("Value",newOutVal);
 						if (newOutVal != 0 && newOutVal != 1) {
-							//cout << "ERROR: curOutVal is not 0 or 1, value " << curOutVal << endl;
+							cout << "ERROR: curOutVal is not 0 or 1, value " << curOutVal << endl;
 							exit(1);
 						}
-						//cout << "curOutVal: " << curOutVal << " newOutVal: " << newOutVal << endl;
+						cout << "curOutVal: " << curOutVal << " newOutVal: " << newOutVal << endl;
 						if(curOutVal!=newOutVal){
-							//cout << "Out val changed for gate:" << curInst->getName() << endl;
+							cout << "Out val changed for gate:" << curInst->getName() << endl;
 							it_instPort->second->getPort()->owner()->setProp("Value", newOutVal); // update value for out node
 							for (auto it: it_instPort->second->getNode()->getInstPorts()) { // update values of all nodes (inside of gates) that are connected to out node
 								if (it.second->getPort()->getDirection() == IN) {
-									//cout << "updating value IN node:" << it.second->getPort()->owner()->getName() << endl;
+									cout << "updating value IN node:" << it.second->getPort()->owner()->getName() << endl;
 									it.second->getPort()->owner()->setProp("Value", newOutVal);
 								}
 							}
-							//cout << "pushing node: " << it_instPort->second->getPort()->owner()->getName() << endl;
+							cout << "pushing node: " << it_instPort->second->getPort()->owner()->getName() << endl;
 							node_que.push(it_instPort->second->getNode());// Out value of a gate changed, hence pushing node to node queue
 						}
 					}
