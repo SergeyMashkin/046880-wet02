@@ -27,23 +27,48 @@ void evaluate_gate(hcmInstance *curInst){
 	bool curPortVal, curOutVal;
 	bool firstPort = true;
 	cout << "Evaluating gate: " << curInst->getName() << " - " << cell_name << endl;
+	// handle in case of dff , if clk is 1 - set out to input, else - keep the value
+	if (cell_name.find("dff") != std::string::npos) {
+		cout << "Evaluating dff gate: " << curInst->getName() << endl;
+		bool clkVal;
+		bool dVal;
+		for (it_instPort = curInst->getInstPorts().begin(); it_instPort != curInst->getInstPorts().end(); it_instPort++) {
+			curPort = it_instPort->second->getPort();
+			if (curPort->getDirection() == IN) {
+				it_instPort->second->getNode()->getProp("Value", curPortVal);
+				if (curPort->getName().find("D") != std::string::npos) {
+					cout << "dff D value is : " << curPortVal << endl;
+					dVal = curPortVal;
+				}
+				else if (curPort->getName().find("CLK") != std::string::npos) {
+					cout << "dff CLK value is : " << curPortVal << endl;
+					clkVal = curPortVal;
+				}
+			}
+			else if (curPort->getDirection() == OUT) {
+				outInstPort = it_instPort->second;
+			}
+		}
+		cout << "clkVal: " << clkVal << " dVal: " << dVal << endl;
+		if (clkVal) {
+			outInstPort->getNode()->setProp("Value", dVal);
+			cout << "setting value for " << outInstPort->getNode()->getName() << " to " << dVal << endl;
+		}
+		cout << "Finished dff gate: " << curInst->getName() << " Hit ENTER to continue" << endl;
+		cin.ignore();
+		return;
+	}
 	for(it_instPort = curInst->getInstPorts().begin();it_instPort!=curInst->getInstPorts().end(); it_instPort++){
-		// if instance is i6 , print all of its pots values
-
 		curPort = it_instPort->second->getPort();
 		if(curPort->getDirection()==IN){
 			it_instPort->second->getNode()->getProp("Value",curPortVal);
 			cout << "Eval_Gate : IN node name: " << it_instPort->second->getNode()->getName() << " value: " << curPortVal << endl;
-			// if it_instPort->second->getNode()->getName() is ending with "Zbus[0]" pause and wait for user to hit ENTER key.
-			// if (it_instPort->second->getNode()->getName().find("Zbus[0]") != std::string::npos) {
-			// 	cout << "Press ENTER to continue" << endl;
-			// 	cin.ignore();
-			// }
+
 			if(firstPort){
 				curOutVal = curPortVal;
 				firstPort = false;
 			}
-			else{
+			else{ 
 				if ((cell_name.find("xor") != std::string::npos) || (cell_name.find("xnor") != std::string::npos)) 
 					curOutVal = curOutVal ^ curPortVal;
 				else if ((cell_name.find("or") != std::string::npos) || (cell_name.find("nor") != std::string::npos))
@@ -62,15 +87,7 @@ void evaluate_gate(hcmInstance *curInst){
 	if (cell_name.find("inv")!= std::string::npos || cell_name.find("nor")!= std::string::npos || cell_name.find("not")!= std::string::npos 
 					|| cell_name.find("nand")!= std::string::npos  || cell_name.find("xnor")!= std::string::npos)
 		curOutVal = !curOutVal;
-	// throw error if curOutVal is not defined 0 or 1
-
-	// stop the code
 	cout << "setting value for " << outInstPort->getNode()->getName() << " to " << curOutVal << endl;	
-	if (outInstPort->getNode()->getName().find("CC8/Cb2/X4_0") != std::string::npos || outInstPort->getNode()->getName().find("Cy1bus[0]") != std::string::npos || outInstPort->getNode()->getName().find("Cy2bus[0]") != std::string::npos) {
-		cout << "Press ENTER to continue" << endl;
-		//cin.ignore();
-	}
-
 	outInstPort->getNode()->setProp("Value", curOutVal);
 }
 
