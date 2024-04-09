@@ -225,7 +225,6 @@ int main(int argc, char **argv) {
 	bool newInVal = 0;
 	bool curOutVal = 0; 
 	bool newOutVal = 0;
-	bool curCLK = 0;
 	bool in_gates_que = false;
 	bool first_node_run = true;
 	queue<hcmInstance*> gate_que;
@@ -327,7 +326,6 @@ int main(int argc, char **argv) {
 		for(it_signal=signals.begin();it_signal!=signals.end();it_signal++){
 			flatCell->getPort(*it_signal)->owner()->getProp("Value", curInVal);// Get current node signal value
 			parser.getSigValue(*it_signal,newInVal);// Get signal value from vector
-			parser.getSigValue("CLK",curCLK);//Get CLK signal value, to simplify next steps
 			if(curInVal!=newInVal){ // WARNING: all values init. to 0, if we get a first vector 0..0 there wont be any update
 				flatCell->getPort(*it_signal)->owner()->setProp("Value", newInVal);// Update the node signal value
 				node_que.push(flatCell->getPort(*it_signal)->owner());// Push the current node in the node queue
