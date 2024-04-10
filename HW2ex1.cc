@@ -225,7 +225,6 @@ int main(int argc, char **argv) {
 	bool newInVal = 0;
 	bool curOutVal = 0; 
 	bool newOutVal = 0;
-	bool curCLK = 0;
 	bool in_gates_que = false;
 	bool first_node_run = true;
 	queue<hcmInstance*> gate_que;
@@ -240,6 +239,8 @@ int main(int argc, char **argv) {
 	for(it_inst = flatCell->getInstances().begin(); it_inst != flatCell->getInstances().end(); it_inst++){
         it_inst->second->setProp("InQue", in_gates_que);// Each instance will have a marker, to prevent doubling in gate queue
     }
+
+	// START OF MAX RANK CODE
 	vector<pair<int, hcmInstance*>> maxRankVector;
 	for (auto it: flatCell->getInstances()){
 		it.second->setProp("rank", -1);
@@ -289,6 +290,9 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	/// END OF  MAX RANK CODE 
+
+	// START - USING MAX RANK to evaluate cycle 0 - switch to use of flatCell->getInstances() only, and create vector of dff_inst
 	// eval all instances with rank lower than 0
 	for (auto it: flatCell->getInstances()) {
 		int rank = -1;
@@ -317,6 +321,9 @@ int main(int argc, char **argv) {
 			}
 		}
 	}
+	// END - USING MAX RANK to evaluate cycle 0 - switch to use of flatCell->getInstances() only, and create vector of dff_inst
+
+	// Dummy loop - preventing inconsistent results
 	for (auto it: flatCell->getInstances()) {
 		int ranks = -1;  
 		it.second->getProp("rank", ranks);
@@ -327,7 +334,6 @@ int main(int argc, char **argv) {
 		for(it_signal=signals.begin();it_signal!=signals.end();it_signal++){
 			flatCell->getPort(*it_signal)->owner()->getProp("Value", curInVal);// Get current node signal value
 			parser.getSigValue(*it_signal,newInVal);// Get signal value from vector
-			parser.getSigValue("CLK",curCLK);//Get CLK signal value, to simplify next steps
 			if(curInVal!=newInVal){ // WARNING: all values init. to 0, if we get a first vector 0..0 there wont be any update
 				flatCell->getPort(*it_signal)->owner()->setProp("Value", newInVal);// Update the node signal value
 				node_que.push(flatCell->getPort(*it_signal)->owner());// Push the current node in the node queue
